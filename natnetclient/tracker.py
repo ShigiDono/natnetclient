@@ -52,7 +52,7 @@ class RigidBody(object):
 
     def __init__(self, name='', markers=[], id=None, parent_id=None, offset=(0., 0., 0.)):
         super(RigidBody, self).__init__()
-        self.name = name
+        self.name = str(name)
         self.id, self.parent_id = id, parent_id
         self.markers = markers
         self.error = None  # Mean marker error

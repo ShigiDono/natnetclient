@@ -6,14 +6,14 @@ import time
 import threading
 import warnings
 import datetime
-
+import struct
 def strcpy(stream):
     """Reads a IOStream one step at a time, returning the previous string before it reached a null character."""
     eof, szName, idx = '', [], 0
-    while idx <= 200 and eof != '\x00':  # Read until null terminator or after 200 characters.
+    while idx <= 200 and eof != b'\x00':  # Read until null terminator or after 200 characters.
         szName.append(eof)
         eof = stream.read(1)
-    return ''.join(szName).replace(' ', '_')  # Convert to string without spaces.
+    return ''.join([s.decode() for s in szName[1:]]).replace(' ', '_')  # Convert to string without spaces.
 
 NAT_PING  					= 0
 NAT_PINGRESPONSE			= 1
@@ -66,12 +66,12 @@ class NatSocket(object):
         self.client_ip = client_ip
         self.port = port
         # self.port = socket.htons(uPort)  # Not sure why this is necessary.
-        assert isinstance(max_packet_size/4, int), "max_packet_size must be divisible by 4"
+        assert max_packet_size % 4 == 0, "max_packet_size must be divisible by 4"
         self.max_packet_size = max_packet_size
 
 class NatCommSocket(NatSocket):
 
-    def __init__(self, client_ip=CLIENT_ADDRESS, uPort=PORT_COMMAND,
+    def __init__(self, client_ip=CLIENT_ADDRESS, server_ip=CLIENT_ADDRESS, uPort=PORT_COMMAND,
                  max_packet_size=MAX_PACKETSIZE):
         """Internet Protocol socket with presets for Motive Command Socket.
 
@@ -81,7 +81,7 @@ class NatCommSocket(NatSocket):
         """
         super(NatCommSocket, self).__init__(client_ip, uPort, max_packet_size)
         # Set Instance Attributes
-        self.server_ip = client_ip  # Currently set to same value as client_ip.  May change when computer changes.
+        self.server_ip = server_ip  # Currently set to same value as client_ip.  May change when computer changes.
 
         # Connect Socket
         self._sock.bind((client_ip, 0))
@@ -168,7 +168,7 @@ class NatDataSocket(NatSocket):
 
 class NatClient(object):
 
-    def __init__(self, client_ip=CLIENT_ADDRESS, data_port=PORT_DATA, comm_port=PORT_COMMAND, read_rate=400):
+    def __init__(self, client_ip=CLIENT_ADDRESS, server_ip=CLIENT_ADDRESS, data_port=PORT_DATA, comm_port=PORT_COMMAND, read_rate=400):
         """
         The Optitrack NatNet Interface.  When initialized, starts a background thread that automatically updates data.
 
@@ -200,7 +200,7 @@ class NatClient(object):
         self.tracked_models_changed = True
 
         # Create Command and Data Sockets
-        self.comm_sock = NatCommSocket(client_ip, comm_port)
+        self.comm_sock = NatCommSocket(client_ip, server_ip, comm_port)
 
         # Ping server to establish connection and get version numbers.
         self.server_name, self.version, self.natnet_version = self.ping()
@@ -241,11 +241,12 @@ class NatClient(object):
         packet = self.comm_sock.get_data(NAT_PING)
 
         unpacked = unpack(str(MAX_NAMELENGTH) + "s4B4B", packet._packet[4:])
-        server_name = unpacked[0].split('\x00')[0]  # Rest of name string is junk.
+        server_name = unpacked[0].split(b'\x00')[0]  # Rest of name string is junk.
         Version = unpacked[1:5]
         NatNetVersion = unpacked[5:9]
 
         assert NatNetVersion[0] >= 2, "NatNetVersion not compatible with parser (Requires 2.0.0.0 or up)"
+        print('Ping Response Received from compatible server.')
 
         return (server_name, Version, NatNetVersion)
 
