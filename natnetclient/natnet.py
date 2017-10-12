@@ -84,7 +84,7 @@ class NatCommSocket(NatSocket):
         self.server_ip = server_ip  # Currently set to same value as client_ip.  May change when computer changes.
 
         # Connect Socket
-        self._sock.bind((client_ip, 0))
+        # self._sock.bind((client_ip, 0))
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self._sock.setblocking(0)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, OPT_VAL)  # Not originally in this function. Check why.
@@ -151,15 +151,48 @@ class NatDataSocket(NatSocket):
     def __init__(self, client_ip=CLIENT_ADDRESS, port=PORT_DATA, max_packet_size=MAX_PACKETSIZE):
         """Internet Protocol socket with presets for Motive Data Socket."""
         super(NatDataSocket, self).__init__(client_ip, port, max_packet_size)
+        self._sock.close()
+
+        addrinfo = socket.getaddrinfo(MULTICAST_ADDRESS, None)[0]
+        self._sock = socket.socket(addrinfo[0], socket.SOCK_DGRAM)# socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
 
         # Configure and Connect socket
-        self._sock._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        mreq = socket.inet_aton(MULTICAST_ADDRESS) + socket.inet_aton(client_ip)
+        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        group_bin = socket.inet_pton(addrinfo[0], addrinfo[4][0])
+        mreq = group_bin + struct.pack('=I', socket.INADDR_ANY)
+        # mreq = socket.inet_aton(MULTICAST_ADDRESS) + socket.inet_aton(client_ip)
         self._sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, OPT_VAL)
-        self._sock.bind((client_ip, port))
+        self._sock.bind(('', port)) #client_ip
         # self.bind((Optitrack.CLIENT_ADDRESS, socket.htons(Optitrack.PORT_DATA)))  # If the above line doesn't work.
-        self._sock.settimeout(60.0)
+        self._sock.settimeout(4.0)
+        # # Look up multicast group address in name server and find out IP version
+
+        # # Create a socket
+        # s = 
+
+        # # Allow multiple copies of this program on one machine
+        # # (not strictly needed)
+        # s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # # Bind it to the port
+        # s.bind(('', MYPORT))
+
+        # group_bin = socket.inet_pton(addrinfo[0], addrinfo[4][0])
+        # # Join group
+        # if addrinfo[0] == socket.AF_INET: # IPv4
+        #     mreq = group_bin + struct.pack('=I', socket.INADDR_ANY)
+        #     s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        # else:
+        #     mreq = group_bin + struct.pack('@I', 0)
+        #     s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mreq)
+
+        # # Loop, printing any data we receive
+        # while True:
+        #     data, sender = s.recvfrom(1500)
+        #     while data[-1:] == '\0': data = data[:-1] # Strip trailing \0's
+        #     print (str(sender) + '  ' + repr(data))
+
 
     def recv(self):
         """Receives packet from NatNet Server and returns as NatPacket instance."""
